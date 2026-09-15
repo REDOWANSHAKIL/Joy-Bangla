@@ -5,24 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile Picture Frame Generator</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
-        #canvas-container { margin: 20px auto; max-width: 500px; display: none; }
-        canvas { width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .btn { background: #1877f2; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; margin: 10px; }
-        .btn:hover { background: #166fe5; }
+        body { 
+            font-family: sans-serif; 
+            text-align: center; 
+            padding: 20px; 
+            background: #f0f2f5; 
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        #canvas-container { 
+            margin: 20px auto; 
+            max-width: 500px; 
+            display: none; 
+        }
+        canvas { 
+            width: 100%; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+        }
+        .btn { 
+            background: #1877f2; 
+            color: white; 
+            padding: 12px 24px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            margin: 10px; 
+            font-weight: bold;
+        }
+        .btn:hover { 
+            background: #166fe5; 
+        }
+        input[type="file"] {
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Create Your Framed Profile Picture</h1>
-    <p>Upload your photo to apply our custom Facebook frame!</p>
-    
-    <input type="file" id="upload" accept="image/*">
-    
-    <div id="canvas-container">
-        <canvas id="canvas" width="1500" height="1500"></canvas>
-        <br>
-        <button class="btn" id="download-btn">Download Framed Photo</button>
+    <div class="container">
+        <h1>Create Your Framed Profile Picture</h1>
+        <p>Upload your personal photo to apply the custom profile frame automatically!</p>
+        
+        <input type="file" id="upload" accept="image/*">
+        
+        <div id="canvas-container">
+            <canvas id="canvas" width="1500" height="1500"></canvas>
+            <br>
+            <button class="btn" id="download-btn">Download Framed Photo</button>
+        </div>
     </div>
 
     <script>
@@ -32,11 +70,13 @@
         const container = document.getElementById('canvas-container');
         const downloadBtn = document.getElementById('download-btn');
 
-        // Path to your transparent frame PNG hosted in this repository
+        // IMPORTANT: Change this to match your EXACT filename case on GitHub
         const FRAME_SRC = 'frame.png'; 
 
         let userImage = new Image();
         let frameImage = new Image();
+        
+        frameImage.crossOrigin = "anonymous";
         frameImage.src = FRAME_SRC;
 
         upload.addEventListener('change', (e) => {
@@ -51,17 +91,46 @@
         });
 
         userImage.onload = () => {
-            // Clear canvas
+            // 1. Reset and wipe canvas clean
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // 1. Draw User Image (scaled to cover the 1500x1500 square)
+            // 2. Prepare user image measurements to scale into a square crop
             let minDim = Math.min(userImage.width, userImage.height);
             let sx = (userImage.width - minDim) / 2;
             let sy = (userImage.height - minDim) / 2;
-            ctx.drawImage(userImage, sx, sy, minDim, minDim, 0, 0, canvas.width, canvas.height);
             
-            // 2. Overlay the Frame
-            ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
+            // 3. Draw the user photo centered inside the specific frame circle dimensions
+            // Circle parameters calculated to fit the cutout window perfectly
+            const circleX = 672;
+            const circleY = 792;
+            const radius = 350;
+            
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(circleX, circleY, radius, 0, Math.PI * 2);
+            ctx.clip();
+            
+            // Draw the user photo cleanly cropped into a circle shape
+            ctx.drawImage(userImage, sx, sy, minDim, minDim, circleX - radius, circleY - radius, radius * 2, radius * 2);
+            ctx.restore();
+            
+            // 4. Create a dynamic masking layer to cut a physical hole in the white frame template
+            let offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = canvas.width;
+            offscreenCanvas.height = canvas.height;
+            let offCtx = offscreenCanvas.getContext('2d');
+            
+            // Draw frame template onto background calculation layer
+            offCtx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
+            
+            // Clear out the white block circle to create a completely transparent viewport
+            offCtx.globalCompositeOperation = 'destination-out';
+            offCtx.beginPath();
+            offCtx.arc(circleX, circleY, radius - 5, 0, Math.PI * 2); 
+            offCtx.fill();
+            
+            // 5. Draw the final corrected transparency frame directly on top of the user picture
+            ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
             
             container.style.display = 'block';
         };
@@ -73,5 +142,6 @@
             link.click();
         });
     </script>
+    
 </body>
 </html>
